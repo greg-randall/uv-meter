@@ -1,51 +1,91 @@
 #!/usr/bin/env python
-
 import veml6070
-
-import RPi.GPIO as GPIO
-
-
 from LCD import LCD
-
-
-
-
+from pretty_time_delta import pretty_time_delta
 import time
 from datetime import datetime, timezone
-
-
 veml = veml6070.Veml6070()
-
-veml.set_integration_time(veml6070.INTEGRATIONTIME_2T)
-
+veml.set_integration_time(veml6070.INTEGRATIONTIME_1T)
 lcd = LCD(2,0x27,True)
 
+#button experiments
+#import RPi.GPIO as GPIO
+#GPIO.setmode(GPIO.BCM)
+#GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+#GPIO.setup(24, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-GPIO.setmode(GPIO.BCM)
+ 
+start_measurement_time = time.time()
+start_time = start_measurement_time
+total_uv = 0
 
-GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(24, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+desired_uv = 4600
 
-#f=open("log_uv.txt", "a+")
-while True:
-    utc_time = datetime.fromtimestamp(int(time.time()), timezone.utc)
-    local_time = utc_time.astimezone()
-    local_time = str(local_time.strftime("%m/%d/%Y - %I:%M:%S%p (%Z)"))
+try:
+    while True:
+        if total_uv >= desired_uv:
+            lcd.message(f"Desired Exposure", 1)
+            lcd.message(f"Reached!!!", 2)
+            del lcd
+            del veml  
+            quit()
 
-    uv_raw = veml.get_uva_light_intensity_raw()
-    uv = veml.get_uva_light_intensity()
-    
-    output = f"{local_time}, {uv} W/(m*m), {uv_raw}\n"
-    lcd.message(f"{round(uv,3)} W/(m*m)", 1)
-    lcd.message(f"{uv_raw} raw", 2)
-    
-    input_state = GPIO.input(23)
-    if input_state == False:
-        print('Button L')
+        previous_start = start_time
+        start_time = time.time()
+
+        elapsed = start_time-previous_start
+        print(f"cycle time {elapsed}")
+
+            
         
-    input_state = GPIO.input(24)
-    if input_state == False:
-        print('Button R')
+
+        uv_raw = veml.get_uva_light_intensity_raw()
+        uv = veml.get_uva_light_intensity()
         
-    
-    
+        end_measurement_time = time.time()
+
+        total_uv = total_uv + uv
+
+        
+
+        if uv == 0:
+            time_left = "infinity"
+        else:
+            left = (desired_uv - total_uv)/uv
+            if left < 0:
+                time_left = "0s"
+            else:
+                time_left = pretty_time_delta((desired_uv - total_uv)/uv)
+        
+
+
+        line_1 = f"{round(total_uv)}/{desired_uv} {round(uv,1)}UV"
+        line_2 = f"wait: {time_left} "
+        
+        lcd.message(line_1, 1)
+        lcd.message(line_2, 2)
+        print(f"{line_1}\n{line_2}")
+
+        end_time = time.time()
+
+        if end_time-start_time<1:
+            time.sleep(1-(end_time-start_time))
+
+        #button experiments
+        #input_state = GPIO.input(23)
+        #if input_state == False:
+        #    print('Button L')
+        #input_state = GPIO.input(24)
+        #if input_state == False:
+        #    print('Button R') 
+
+
+except KeyboardInterrupt:
+    lcd.message(f"", 1)
+    lcd.message(f"", 2)
+    del lcd
+    del veml
+
+
+
+
