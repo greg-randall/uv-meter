@@ -6,6 +6,7 @@ from LCD import LCD
 from pretty_time_delta import pretty_time_delta
 import time
 from datetime import datetime, timezone
+import RPi.GPIO as GPIO # Import Raspberry Pi GPIO library
 
 
 def accurate_timer(desired, increment, fudge):
@@ -36,7 +37,14 @@ def deposit_fudge(fudge, loop_inaccuracy):
     f.close()
 
 
+
 if __name__ == '__main__':
+    #setup buttons 
+    GPIO.setwarnings(False) # Ignore warning for now
+    GPIO.setmode(GPIO.BOARD) # Use physical pin numbering
+    GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(24, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
     #setup uv sensor
     veml = veml6070.Veml6070() 
@@ -45,13 +53,25 @@ if __name__ == '__main__':
     #setup LCD
     lcd = LCD(2,0x27,True)
 
-    desired_uv = 100 #4600
+    desired_uv = 20000
 
 
     total_uv = 0
     counter = 0
 
     fudge = collect_fudge()
+
+    setting_up = True 
+
+    #while setting_up:
+    #    if GPIO.input(18) == GPIO.HIGH:
+    #        print("Button 18 pushed!")
+    #    if GPIO.input(23) == GPIO.HIGH:
+    #        print("Button 23 pushed!")
+    #    if GPIO.input(23) == GPIO.HIGH:
+    #        print("Button 24 pushed!")
+
+
 
     before_testing = time.time()  
     while total_uv <= desired_uv:
@@ -63,7 +83,7 @@ if __name__ == '__main__':
         total_uv = total_uv + uv
 
         if uv == 0:
-            time_left = "infinity"
+            time_left = "No UV"
         else:
 
             if (desired_uv - total_uv)/uv <= 0:
@@ -71,12 +91,17 @@ if __name__ == '__main__':
             else:
                 time_left = pretty_time_delta((desired_uv - total_uv)/uv)
         
-
-        line_1 = f"{round(total_uv)}/{desired_uv} {round(uv,1)}UV"
-        line_2 = f"wait: {time_left} "
+        if uv<0.09:
+            round_digits = 3
+        else:
+            round_digits = 1
+        line_1 = f"{round(total_uv)}/{round(desired_uv)} UV: {round(uv,round_digits)}"
+        line_2 = f"w: {time_left} "
         
         lcd.message(line_1, 1)
         lcd.message(line_2, 2)
+        
+        print(f"{line_1}\n{line_2}")
 
         counter +=1
         middle_time = time.time()
